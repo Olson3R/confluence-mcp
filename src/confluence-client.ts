@@ -219,7 +219,7 @@ export class ConfluenceClient {
     }
 
     // Get space details to obtain the space ID
-    const space = await this.getSpace(spaceKey);
+    const space = await this.getSpaceByKey(spaceKey);
     if (!space.id) {
       throw new Error(`Unable to get space ID for space: ${spaceKey}`);
     }
@@ -306,13 +306,33 @@ export class ConfluenceClient {
     };
   }
 
-  async getSpace(spaceKey: string): Promise<ConfluenceSpace> {
+  async getSpaceById(spaceId: string): Promise<ConfluenceSpace> {
+    // Note: Since we only have access to space keys in configuration, we need to validate by key
+    // This method is primarily for internal use after we've obtained a space ID
+    const response: AxiosResponse<ConfluenceSpace> = await this.client.get(`/spaces/${spaceId}`);
+    
+    // Validate access after getting the space data
+    if (!validateSpaceAccess(response.data.key, this.config.allowedSpaces)) {
+      throw new Error(`Access denied to space: ${response.data.key}`);
+    }
+    
+    return response.data;
+  }
+
+  async getSpaceByKey(spaceKey: string): Promise<ConfluenceSpace> {
     if (!validateSpaceAccess(spaceKey, this.config.allowedSpaces)) {
       throw new Error(`Access denied to space: ${spaceKey}`);
     }
 
-    const response: AxiosResponse<ConfluenceSpace> = await this.client.get(`/spaces/${spaceKey}`);
-    return response.data;
+    // Get all spaces and find the one with matching key
+    const spaces = await this.listSpaces(50, 0);
+    const space = spaces.results.find(s => s.key === spaceKey);
+    
+    if (!space) {
+      throw new Error(`Space not found: ${spaceKey}`);
+    }
+    
+    return space;
   }
 
   async getSpaceContent(spaceKey: string, limit = 25, start = 0, bodyFormat?: string): Promise<PaginatedResult<ConfluencePage>> {

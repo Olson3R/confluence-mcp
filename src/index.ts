@@ -179,8 +179,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: 'get_space',
-        description: 'Get detailed information about a specific Confluence space',
+        name: 'get_space_by_id',
+        description: 'Get detailed information about a specific Confluence space by ID',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            spaceId: {
+              type: 'string',
+              description: 'Space ID'
+            }
+          },
+          required: ['spaceId']
+        }
+      },
+      {
+        name: 'get_space_by_key',
+        description: 'Get detailed information about a specific Confluence space by key',
         inputSchema: {
           type: 'object',
           properties: {
@@ -375,12 +389,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'get_space': {
+      case 'get_space_by_id': {
+        const { spaceId } = args as {
+          spaceId: string;
+        };
+        
+        const space = await confluenceClient.getSpaceById(spaceId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(space, null, 2)
+            }
+          ]
+        };
+      }
+
+      case 'get_space_by_key': {
         const { spaceKey } = args as {
           spaceKey: string;
         };
         
-        const space = await confluenceClient.getSpace(spaceKey);
+        const space = await confluenceClient.getSpaceByKey(spaceKey);
         return {
           content: [
             {
