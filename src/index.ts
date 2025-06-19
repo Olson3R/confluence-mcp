@@ -51,6 +51,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Maximum results (default: 25)',
               default: 25
+            },
+            start: {
+              type: 'number',
+              description: 'Starting index for pagination (default: 0)',
+              default: 0
             }
           },
           required: []
@@ -158,6 +163,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Maximum results (default: 50)',
               default: 50
+            },
+            start: {
+              type: 'number',
+              description: 'Starting index for pagination (default: 0)',
+              default: 0
             }
           }
         }
@@ -176,6 +186,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Maximum results (default: 25)',
               default: 25
+            },
+            start: {
+              type: 'number',
+              description: 'Starting index for pagination (default: 0)',
+              default: 0
             }
           },
           required: ['spaceKey']
@@ -195,6 +210,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Maximum results (default: 25)',
               default: 25
+            },
+            start: {
+              type: 'number',
+              description: 'Starting index for pagination (default: 0)',
+              default: 0
             }
           },
           required: ['pageId']
@@ -210,11 +230,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'search_confluence': {
-        const { query, title, spaceKey, limit = 25 } = args as {
+        const { query, title, spaceKey, limit = 25, start = 0 } = args as {
           query?: string;
           title?: string;
           spaceKey?: string;
           limit?: number;
+          start?: number;
         };
         
         // Validate that at least one search parameter is provided
@@ -222,7 +243,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('At least one of "query" or "title" must be provided');
         }
         
-        const results = await confluenceClient.searchContent(query, spaceKey, limit, title);
+        const results = await confluenceClient.searchContent(query, spaceKey, limit, title, start);
         return {
           content: [
             {
@@ -307,11 +328,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'list_spaces': {
-        const { limit = 50 } = args as {
+        const { limit = 50, start = 0 } = args as {
           limit?: number;
+          start?: number;
         };
         
-        const spaces = await confluenceClient.listSpaces(limit);
+        const spaces = await confluenceClient.listSpaces(limit, start);
         return {
           content: [
             {
@@ -323,12 +345,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_space_content': {
-        const { spaceKey, limit = 25 } = args as {
+        const { spaceKey, limit = 25, start = 0 } = args as {
           spaceKey: string;
           limit?: number;
+          start?: number;
         };
         
-        const pages = await confluenceClient.getSpaceContent(spaceKey, limit);
+        const pages = await confluenceClient.getSpaceContent(spaceKey, limit, start);
         return {
           content: [
             {
@@ -340,12 +363,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_page_children': {
-        const { pageId, limit = 25 } = args as {
+        const { pageId, limit = 25, start = 0 } = args as {
           pageId: string;
           limit?: number;
+          start?: number;
         };
         
-        const children = await confluenceClient.getPageChildren(pageId, limit);
+        const children = await confluenceClient.getPageChildren(pageId, limit, start);
         return {
           content: [
             {

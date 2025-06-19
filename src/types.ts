@@ -105,3 +105,17 @@ export interface MovePageRequest {
     id: string;
   }>;
 }
+
+export interface PaginatedResult<T> {
+  results: T[];
+  start: number;
+  limit: number;
+  size: number;
+  _links: {
+    next?: string;
+    prev?: string;
+    base?: string;
+    context?: string;
+    self?: string;
+  };
+}

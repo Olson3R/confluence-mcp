@@ -6,7 +6,8 @@ import {
   SearchResult,
   CreatePageRequest,
   UpdatePageRequest,
-  MovePageRequest
+  MovePageRequest,
+  PaginatedResult
 } from './types.js';
 import { validateSpaceAccess } from './config.js';
 import { Logger } from './logger.js';
@@ -104,7 +105,8 @@ export class ConfluenceClient {
     query?: string, 
     spaceKey?: string, 
     limit = 25, 
-    title?: string
+    title?: string,
+    start = 0
   ): Promise<SearchResult> {
     // V2 API doesn't have a direct search endpoint, so we use v1 for CQL search
     // This is the recommended approach as CQL search is only available in v1
@@ -130,6 +132,7 @@ export class ConfluenceClient {
     const params: any = {
       cql: searchQuery,
       limit,
+      start,
       expand: 'body.storage,version,space'
     };
 
@@ -278,30 +281,37 @@ export class ConfluenceClient {
     await this.client.delete(`/pages/${pageId}`);
   }
 
-  async listSpaces(limit = 50): Promise<ConfluenceSpace[]> {
-    const response: AxiosResponse<{ results: ConfluenceSpace[] }> = await this.client.get('/spaces', {
-      params: { limit }
+  async listSpaces(limit = 50, start = 0): Promise<PaginatedResult<ConfluenceSpace>> {
+    const response: AxiosResponse<PaginatedResult<ConfluenceSpace>> = await this.client.get('/spaces', {
+      params: { limit, start }
     });
     
-    return response.data.results.filter(space => 
+    const filteredResults = response.data.results.filter(space => 
       validateSpaceAccess(space.key, this.config.allowedSpaces)
     );
+    
+    return {
+      ...response.data,
+      results: filteredResults,
+      size: filteredResults.length
+    };
   }
 
-  async getSpaceContent(spaceKey: string, limit = 25): Promise<ConfluencePage[]> {
+  async getSpaceContent(spaceKey: string, limit = 25, start = 0): Promise<PaginatedResult<ConfluencePage>> {
     if (!validateSpaceAccess(spaceKey, this.config.allowedSpaces)) {
       throw new Error(`Access denied to space: ${spaceKey}`);
     }
 
-    const response: AxiosResponse<{ results: ConfluencePage[] }> = await this.client.get('/pages', {
+    const response: AxiosResponse<PaginatedResult<ConfluencePage>> = await this.client.get('/pages', {
       params: {
         'space-key': spaceKey,
         limit,
+        start,
         expand: 'version,space'
       }
     });
     
-    return response.data.results;
+    return response.data;
   }
 
   async movePage(
@@ -338,7 +348,7 @@ export class ConfluenceClient {
     return response.data;
   }
 
-  async getPageChildren(pageId: string, limit = 25): Promise<ConfluencePage[]> {
+  async getPageChildren(pageId: string, limit = 25, start = 0): Promise<PaginatedResult<ConfluencePage>> {
     const parentPage = await this.getPage(pageId);
     
     if (!parentPage.space || !parentPage.space.key) {
@@ -349,13 +359,14 @@ export class ConfluenceClient {
       throw new Error(`Access denied to space: ${parentPage.space.key}`);
     }
 
-    const response: AxiosResponse<{ results: ConfluencePage[] }> = await this.client.get(`/pages/${pageId}/children`, {
+    const response: AxiosResponse<PaginatedResult<ConfluencePage>> = await this.client.get(`/pages/${pageId}/children`, {
       params: {
         limit,
+        start,
         expand: 'version,space'
       }
     });
     
-    return response.data.results;
+    return response.data;
   }
 }
