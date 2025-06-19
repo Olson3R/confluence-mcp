@@ -40,6 +40,7 @@ export interface ConfluencePage {
 }
 
 export interface ConfluenceSpace {
+  id: string;
   key: string;
   name: string;
   type: string;
@@ -62,11 +63,9 @@ export interface SearchResult {
 }
 
 export interface CreatePageRequest {
+  spaceId: string;
   status: string;
   title: string;
-  space: {
-    key: string;
-  };
   body: {
     representation: string;
     value: string;

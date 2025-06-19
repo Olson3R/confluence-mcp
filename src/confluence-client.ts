@@ -218,10 +218,16 @@ export class ConfluenceClient {
       throw new Error(`Access denied to space: ${spaceKey}`);
     }
 
+    // Get space details to obtain the space ID
+    const space = await this.getSpace(spaceKey);
+    if (!space.id) {
+      throw new Error(`Unable to get space ID for space: ${spaceKey}`);
+    }
+
     const pageData: CreatePageRequest = {
+      spaceId: space.id,
       status: 'current',
       title,
-      space: { key: spaceKey },
       body: {
         representation: 'storage',
         value: content
