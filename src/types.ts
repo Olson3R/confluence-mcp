@@ -62,28 +62,26 @@ export interface SearchResult {
 }
 
 export interface CreatePageRequest {
-  type: string;
+  status: string;
   title: string;
   space: {
     key: string;
   };
   body: {
-    storage: {
-      value: string;
-      representation: string;
-    };
+    representation: string;
+    value: string;
   };
-  ancestors?: Array<{
-    id: string;
-  }>;
+  parentId?: string;
 }
 
 export interface UpdatePageRequest {
+  id: string;
+  status: string;
+  title: string;
+  type: string;
   version: {
     number: number;
   };
-  title: string;
-  type: string;
   body: {
     storage: {
       value: string;

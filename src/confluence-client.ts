@@ -219,19 +219,17 @@ export class ConfluenceClient {
     }
 
     const pageData: CreatePageRequest = {
-      type: 'page',
+      status: 'current',
       title,
       space: { key: spaceKey },
       body: {
-        storage: {
-          value: content,
-          representation: 'storage'
-        }
+        representation: 'storage',
+        value: content
       }
     };
 
     if (parentId) {
-      pageData.ancestors = [{ id: parentId }];
+      pageData.parentId = parentId;
     }
 
     const response: AxiosResponse<ConfluencePage> = await this.client.post('/pages', pageData);
@@ -255,9 +253,11 @@ export class ConfluenceClient {
     }
 
     const updateData: UpdatePageRequest = {
-      version: { number: version },
+      id: pageId,
+      status: 'current',
       title,
       type: 'page',
+      version: { number: version },
       body: {
         storage: {
           value: content,
