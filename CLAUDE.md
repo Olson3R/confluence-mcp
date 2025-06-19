@@ -144,19 +144,43 @@ List all accessible Confluence spaces (filtered by allowed spaces).
 Parameters:
 
 limit (number, optional): Maximum results (default: 50)
+start (number, optional): Starting index for pagination (default: 0)
 
 Example:
 CopyList all available spaces
 
-7. get_space_content
+7. get_space
+Get detailed information about a specific Confluence space.
+Parameters:
+
+spaceKey (string): Space key
+
+Example:
+CopyGet information about the DEV space
+
+Note: The Confluence REST API v2 does not support expand parameters for spaces. If you need additional space-related data, use separate API calls with the returned space information.
+
+8. get_space_content
 Get pages from a specific space.
 Parameters:
 
 spaceKey (string): Space key
 limit (number, optional): Maximum results (default: 25)
+start (number, optional): Starting index for pagination (default: 0)
 
 Example:
 CopyGet all pages from the DEV space
+
+9. get_page_children
+Get child pages of a specific page.
+Parameters:
+
+pageId (string): Parent page ID
+limit (number, optional): Maximum results (default: 25)
+start (number, optional): Starting index for pagination (default: 0)
+
+Example:
+CopyGet all child pages of page 123456789
 
 # Usage Examples
 ## Basic Search

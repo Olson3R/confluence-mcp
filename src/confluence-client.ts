@@ -106,7 +106,8 @@ export class ConfluenceClient {
     spaceKey?: string, 
     limit = 25, 
     title?: string,
-    start = 0
+    start = 0,
+    bodyFormat?: string
   ): Promise<SearchResult> {
     // V2 API doesn't have a direct search endpoint, so we use v1 for CQL search
     // This is the recommended approach as CQL search is only available in v1
@@ -129,11 +130,18 @@ export class ConfluenceClient {
     
     const searchQuery = searchConditions.join(' AND ');
     
+    // Set expand based on bodyFormat parameter
+    let expandParam = 'version,space';
+    if (bodyFormat) {
+      const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
+      expandParam += `,${format}`;
+    }
+    
     const params: any = {
       cql: searchQuery,
       limit,
       start,
-      expand: 'body.storage,version,space'
+      expand: expandParam
     };
 
     if (spaceKey) {
@@ -168,41 +176,48 @@ export class ConfluenceClient {
     };
   }
 
-  async getPage(pageId: string, expand?: string): Promise<ConfluencePage> {
-    const params: any = {};
-    if (expand) {
-      params.expand = expand;
-    } else {
-      params.expand = 'body.storage,version,space';
+  async getPage(pageId: string, bodyFormat?: string): Promise<ConfluencePage> {
+    // First get basic page info from v2 API
+    const pageResponse: AxiosResponse<ConfluencePage> = await this.client.get(`/pages/${pageId}`);
+    
+    // Validate space access
+    if (!pageResponse.data.space || !pageResponse.data.space.key) {
+      throw new Error('Unable to determine page space for access validation');
+    }
+    
+    if (!validateSpaceAccess(pageResponse.data.space.key, this.config.allowedSpaces)) {
+      throw new Error(`Access denied to space: ${pageResponse.data.space.key}`);
     }
 
-    const response: AxiosResponse<ConfluencePage> = await this.client.get(`/pages/${pageId}`, { params });
-    
-    // Check if space information is available and validate access
-    if (response.data.space && response.data.space.key) {
-      if (!validateSpaceAccess(response.data.space.key, this.config.allowedSpaces)) {
-        throw new Error(`Access denied to space: ${response.data.space.key}`);
-      }
-    } else {
-      // If space information is not available, we need to get it separately
-      // This can happen with some expand parameter combinations in v2 API
-      const pageWithSpace = await this.client.get(`/pages/${pageId}`, { 
-        params: { expand: 'space' } 
-      });
-      if (pageWithSpace.data.space && pageWithSpace.data.space.key) {
-        if (!validateSpaceAccess(pageWithSpace.data.space.key, this.config.allowedSpaces)) {
-          throw new Error(`Access denied to space: ${pageWithSpace.data.space.key}`);
+    // If body content is requested, use v1 API for reliable body retrieval
+    if (bodyFormat) {
+      try {
+        const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
+        const v1Url = `${this.config.baseUrl}/wiki/rest/api/content/${pageId}?expand=${format},version,space`;
+        const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
+        
+        const v1Response = await axios.get(v1Url, {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        });
+        
+        // Merge v1 body content with v2 page data
+        if (v1Response.data.body) {
+          pageResponse.data.body = v1Response.data.body;
         }
-        // Add space information to the response if it was missing
-        if (!response.data.space) {
-          response.data.space = pageWithSpace.data.space;
+      } catch (error) {
+        if (this.config.debug) {
+          console.warn('Failed to retrieve body content from v1 API:', error);
         }
-      } else {
-        throw new Error('Unable to determine page space for access validation');
+        // Continue without body content rather than failing
       }
     }
     
-    return response.data;
+    return pageResponse.data;
   }
 
   async createPage(
@@ -297,19 +312,61 @@ export class ConfluenceClient {
     };
   }
 
-  async getSpaceContent(spaceKey: string, limit = 25, start = 0): Promise<PaginatedResult<ConfluencePage>> {
+  async getSpace(spaceKey: string): Promise<ConfluenceSpace> {
     if (!validateSpaceAccess(spaceKey, this.config.allowedSpaces)) {
       throw new Error(`Access denied to space: ${spaceKey}`);
     }
 
+    const response: AxiosResponse<ConfluenceSpace> = await this.client.get(`/spaces/${spaceKey}`);
+    return response.data;
+  }
+
+  async getSpaceContent(spaceKey: string, limit = 25, start = 0, bodyFormat?: string): Promise<PaginatedResult<ConfluencePage>> {
+    if (!validateSpaceAccess(spaceKey, this.config.allowedSpaces)) {
+      throw new Error(`Access denied to space: ${spaceKey}`);
+    }
+
+    // Get basic page list from v2 API
     const response: AxiosResponse<PaginatedResult<ConfluencePage>> = await this.client.get('/pages', {
       params: {
         'space-key': spaceKey,
         limit,
-        start,
-        expand: 'version,space'
+        start
       }
     });
+    
+    // If body content is requested, enhance each page with body content from v1 API
+    if (bodyFormat && response.data.results.length > 0) {
+      const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
+      const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
+      
+      const enhancedResults = await Promise.all(
+        response.data.results.map(async (page) => {
+          try {
+            const v1Url = `${this.config.baseUrl}/wiki/rest/api/content/${page.id}?expand=${format},version,space`;
+            const v1Response = await axios.get(v1Url, {
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              },
+              timeout: 30000
+            });
+            
+            if (v1Response.data.body) {
+              page.body = v1Response.data.body;
+            }
+          } catch (error) {
+            if (this.config.debug) {
+              console.warn(`Failed to retrieve body content for page ${page.id}:`, error);
+            }
+          }
+          return page;
+        })
+      );
+      
+      response.data.results = enhancedResults;
+    }
     
     return response.data;
   }
@@ -348,7 +405,7 @@ export class ConfluenceClient {
     return response.data;
   }
 
-  async getPageChildren(pageId: string, limit = 25, start = 0): Promise<PaginatedResult<ConfluencePage>> {
+  async getPageChildren(pageId: string, limit = 25, start = 0, bodyFormat?: string): Promise<PaginatedResult<ConfluencePage>> {
     const parentPage = await this.getPage(pageId);
     
     if (!parentPage.space || !parentPage.space.key) {
@@ -359,13 +416,46 @@ export class ConfluenceClient {
       throw new Error(`Access denied to space: ${parentPage.space.key}`);
     }
 
+    // Get basic children list from v2 API
     const response: AxiosResponse<PaginatedResult<ConfluencePage>> = await this.client.get(`/pages/${pageId}/children`, {
       params: {
         limit,
-        start,
-        expand: 'version,space'
+        start
       }
     });
+    
+    // If body content is requested, enhance each page with body content from v1 API
+    if (bodyFormat && response.data.results.length > 0) {
+      const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
+      const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
+      
+      const enhancedResults = await Promise.all(
+        response.data.results.map(async (page) => {
+          try {
+            const v1Url = `${this.config.baseUrl}/wiki/rest/api/content/${page.id}?expand=${format},version,space`;
+            const v1Response = await axios.get(v1Url, {
+              headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              },
+              timeout: 30000
+            });
+            
+            if (v1Response.data.body) {
+              page.body = v1Response.data.body;
+            }
+          } catch (error) {
+            if (this.config.debug) {
+              console.warn(`Failed to retrieve body content for page ${page.id}:`, error);
+            }
+          }
+          return page;
+        })
+      );
+      
+      response.data.results = enhancedResults;
+    }
     
     return response.data;
   }

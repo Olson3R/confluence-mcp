@@ -56,6 +56,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Starting index for pagination (default: 0)',
               default: 0
+            },
+            bodyFormat: {
+              type: 'string',
+              description: 'Body format to include: "storage" or "view" (optional)',
+              enum: ['storage', 'view']
             }
           },
           required: []
@@ -71,9 +76,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Confluence page ID'
             },
-            expand: {
+            bodyFormat: {
               type: 'string',
-              description: 'Additional data to include (body.storage, version, etc.)'
+              description: 'Body format to include: "storage" or "view" (optional)',
+              enum: ['storage', 'view']
             }
           },
           required: ['pageId']
@@ -173,6 +179,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
+        name: 'get_space',
+        description: 'Get detailed information about a specific Confluence space',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            spaceKey: {
+              type: 'string',
+              description: 'Space key'
+            }
+          },
+          required: ['spaceKey']
+        }
+      },
+      {
         name: 'get_space_content',
         description: 'Get pages from a specific space',
         inputSchema: {
@@ -191,6 +211,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Starting index for pagination (default: 0)',
               default: 0
+            },
+            bodyFormat: {
+              type: 'string',
+              description: 'Body format to include: "storage" or "view" (optional)',
+              enum: ['storage', 'view']
             }
           },
           required: ['spaceKey']
@@ -215,6 +240,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Starting index for pagination (default: 0)',
               default: 0
+            },
+            bodyFormat: {
+              type: 'string',
+              description: 'Body format to include: "storage" or "view" (optional)',
+              enum: ['storage', 'view']
             }
           },
           required: ['pageId']
@@ -230,12 +260,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'search_confluence': {
-        const { query, title, spaceKey, limit = 25, start = 0 } = args as {
+        const { query, title, spaceKey, limit = 25, start = 0, bodyFormat } = args as {
           query?: string;
           title?: string;
           spaceKey?: string;
           limit?: number;
           start?: number;
+          bodyFormat?: string;
         };
         
         // Validate that at least one search parameter is provided
@@ -243,7 +274,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error('At least one of "query" or "title" must be provided');
         }
         
-        const results = await confluenceClient.searchContent(query, spaceKey, limit, title, start);
+        const results = await confluenceClient.searchContent(query, spaceKey, limit, title, start, bodyFormat);
         return {
           content: [
             {
@@ -255,12 +286,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_page': {
-        const { pageId, expand } = args as {
+        const { pageId, bodyFormat } = args as {
           pageId: string;
-          expand?: string;
+          bodyFormat?: string;
         };
         
-        const page = await confluenceClient.getPage(pageId, expand);
+        const page = await confluenceClient.getPage(pageId, bodyFormat);
         return {
           content: [
             {
@@ -344,14 +375,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'get_space': {
+        const { spaceKey } = args as {
+          spaceKey: string;
+        };
+        
+        const space = await confluenceClient.getSpace(spaceKey);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(space, null, 2)
+            }
+          ]
+        };
+      }
+
       case 'get_space_content': {
-        const { spaceKey, limit = 25, start = 0 } = args as {
+        const { spaceKey, limit = 25, start = 0, bodyFormat } = args as {
           spaceKey: string;
           limit?: number;
           start?: number;
+          bodyFormat?: string;
         };
         
-        const pages = await confluenceClient.getSpaceContent(spaceKey, limit, start);
+        const pages = await confluenceClient.getSpaceContent(spaceKey, limit, start, bodyFormat);
         return {
           content: [
             {
@@ -363,13 +411,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_page_children': {
-        const { pageId, limit = 25, start = 0 } = args as {
+        const { pageId, limit = 25, start = 0, bodyFormat } = args as {
           pageId: string;
           limit?: number;
           start?: number;
+          bodyFormat?: string;
         };
         
-        const children = await confluenceClient.getPageChildren(pageId, limit, start);
+        const children = await confluenceClient.getPageChildren(pageId, limit, start, bodyFormat);
         return {
           content: [
             {
