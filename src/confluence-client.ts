@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { 
   ConfluenceConfig, 
   ConfluencePage, 
@@ -9,13 +9,20 @@ import {
   MovePageRequest
 } from './types.js';
 import { validateSpaceAccess } from './config.js';
+import { Logger } from './logger.js';
+
+interface RequestWithMetadata extends InternalAxiosRequestConfig {
+  metadata?: { startTime: number };
+}
 
 export class ConfluenceClient {
   private client: AxiosInstance;
   private config: ConfluenceConfig;
+  private logger: Logger;
 
   constructor(config: ConfluenceConfig) {
     this.config = config;
+    this.logger = new Logger();
     
     const auth = Buffer.from(`${config.username}:${config.apiToken}`).toString('base64');
     
@@ -29,34 +36,68 @@ export class ConfluenceClient {
       timeout: 30000
     });
 
-    if (config.debug) {
-      this.client.interceptors.request.use(request => {
+    // Add request/response logging
+    this.client.interceptors.request.use(async (request: RequestWithMetadata) => {
+      const startTime = Date.now();
+      request.metadata = { startTime };
+      
+      await this.logger.logRequest(
+        request.method || 'unknown',
+        request.url || '',
+        request.params,
+        request.data
+      );
+
+      if (config.debug) {
         console.log('Confluence API Request:', {
           method: request.method,
           url: request.url,
           params: request.params
         });
-        return request;
-      });
+      }
+      return request;
+    });
 
-      this.client.interceptors.response.use(
-        response => {
+    this.client.interceptors.response.use(
+      async (response) => {
+        const requestConfig = response.config as RequestWithMetadata;
+        const duration = requestConfig.metadata?.startTime 
+          ? Date.now() - requestConfig.metadata.startTime 
+          : undefined;
+
+        await this.logger.logResponse(
+          response.config.method || 'unknown',
+          response.config.url || '',
+          response.status,
+          response.data,
+          duration
+        );
+
+        if (config.debug) {
           console.log('Confluence API Response:', {
             status: response.status,
             url: response.config.url
           });
-          return response;
-        },
-        error => {
+        }
+        return response;
+      },
+      async (error) => {
+        await this.logger.logError(
+          error.config?.method || 'unknown',
+          error.config?.url || '',
+          error
+        );
+
+        if (config.debug) {
           console.error('Confluence API Error:', {
             status: error.response?.status,
             message: error.message,
             url: error.config?.url
           });
-          return Promise.reject(error);
         }
-      );
-    }
+        return Promise.reject(error);
+      }
+    );
   }
 
   async searchContent(query: string, spaceKey?: string, limit = 25): Promise<SearchResult> {
