@@ -177,47 +177,35 @@ export class ConfluenceClient {
   }
 
   async getPage(pageId: string, bodyFormat?: string): Promise<ConfluencePage> {
-    // First get basic page info from v2 API
-    const pageResponse: AxiosResponse<ConfluencePage> = await this.client.get(`/pages/${pageId}`);
+    // Use v1 API for getPage since we need space information anyway
+    let expandParam = 'space,version';
+    if (bodyFormat) {
+      const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
+      expandParam += `,${format}`;
+    }
+    
+    const v1Url = `${this.config.baseUrl}/wiki/rest/api/content/${pageId}?expand=${expandParam}`;
+    const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
+    
+    const response = await axios.get(v1Url, {
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
     
     // Validate space access
-    if (!pageResponse.data.space || !pageResponse.data.space.key) {
+    if (!response.data.space || !response.data.space.key) {
       throw new Error('Unable to determine page space for access validation');
     }
     
-    if (!validateSpaceAccess(pageResponse.data.space.key, this.config.allowedSpaces)) {
-      throw new Error(`Access denied to space: ${pageResponse.data.space.key}`);
-    }
-
-    // If body content is requested, use v1 API for reliable body retrieval
-    if (bodyFormat) {
-      try {
-        const format = bodyFormat === 'view' ? 'body.view' : 'body.storage';
-        const v1Url = `${this.config.baseUrl}/wiki/rest/api/content/${pageId}?expand=${format},version,space`;
-        const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
-        
-        const v1Response = await axios.get(v1Url, {
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        });
-        
-        // Merge v1 body content with v2 page data
-        if (v1Response.data.body) {
-          pageResponse.data.body = v1Response.data.body;
-        }
-      } catch (error) {
-        if (this.config.debug) {
-          console.warn('Failed to retrieve body content from v1 API:', error);
-        }
-        // Continue without body content rather than failing
-      }
+    if (!validateSpaceAccess(response.data.space.key, this.config.allowedSpaces)) {
+      throw new Error(`Access denied to space: ${response.data.space.key}`);
     }
     
-    return pageResponse.data;
+    return response.data;
   }
 
   async createPage(
