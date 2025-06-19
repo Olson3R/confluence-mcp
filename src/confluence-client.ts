@@ -175,8 +175,28 @@ export class ConfluenceClient {
 
     const response: AxiosResponse<ConfluencePage> = await this.client.get(`/pages/${pageId}`, { params });
     
-    if (!validateSpaceAccess(response.data.space.key, this.config.allowedSpaces)) {
-      throw new Error(`Access denied to space: ${response.data.space.key}`);
+    // Check if space information is available and validate access
+    if (response.data.space && response.data.space.key) {
+      if (!validateSpaceAccess(response.data.space.key, this.config.allowedSpaces)) {
+        throw new Error(`Access denied to space: ${response.data.space.key}`);
+      }
+    } else {
+      // If space information is not available, we need to get it separately
+      // This can happen with some expand parameter combinations in v2 API
+      const pageWithSpace = await this.client.get(`/pages/${pageId}`, { 
+        params: { expand: 'space' } 
+      });
+      if (pageWithSpace.data.space && pageWithSpace.data.space.key) {
+        if (!validateSpaceAccess(pageWithSpace.data.space.key, this.config.allowedSpaces)) {
+          throw new Error(`Access denied to space: ${pageWithSpace.data.space.key}`);
+        }
+        // Add space information to the response if it was missing
+        if (!response.data.space) {
+          response.data.space = pageWithSpace.data.space;
+        }
+      } else {
+        throw new Error('Unable to determine page space for access validation');
+      }
     }
     
     return response.data;
@@ -220,6 +240,10 @@ export class ConfluenceClient {
   ): Promise<ConfluencePage> {
     const currentPage = await this.getPage(pageId);
     
+    if (!currentPage.space || !currentPage.space.key) {
+      throw new Error('Unable to determine page space for access validation');
+    }
+    
     if (!validateSpaceAccess(currentPage.space.key, this.config.allowedSpaces)) {
       throw new Error(`Access denied to space: ${currentPage.space.key}`);
     }
@@ -242,6 +266,10 @@ export class ConfluenceClient {
 
   async deletePage(pageId: string): Promise<void> {
     const currentPage = await this.getPage(pageId);
+    
+    if (!currentPage.space || !currentPage.space.key) {
+      throw new Error('Unable to determine page space for access validation');
+    }
     
     if (!validateSpaceAccess(currentPage.space.key, this.config.allowedSpaces)) {
       throw new Error(`Access denied to space: ${currentPage.space.key}`);
@@ -282,6 +310,10 @@ export class ConfluenceClient {
     parentId?: string
   ): Promise<ConfluencePage> {
     const currentPage = await this.getPage(pageId);
+    
+    if (!currentPage.space || !currentPage.space.key) {
+      throw new Error('Unable to determine page space for access validation');
+    }
     
     if (!validateSpaceAccess(currentPage.space.key, this.config.allowedSpaces)) {
       throw new Error(`Access denied to source space: ${currentPage.space.key}`);
