@@ -31,13 +31,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'search_confluence',
-        description: 'Search for content across allowed Confluence spaces',
+        description: 'Search for content across allowed Confluence spaces by text and/or title',
         inputSchema: {
           type: 'object',
           properties: {
             query: {
               type: 'string',
-              description: 'Search query'
+              description: 'Search query for content text'
+            },
+            title: {
+              type: 'string',
+              description: 'Search query for page titles'
             },
             spaceKey: {
               type: 'string',
@@ -49,7 +53,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               default: 25
             }
           },
-          required: ['query']
+          required: []
         }
       },
       {
@@ -187,13 +191,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'search_confluence': {
-        const { query, spaceKey, limit = 25 } = args as {
-          query: string;
+        const { query, title, spaceKey, limit = 25 } = args as {
+          query?: string;
+          title?: string;
           spaceKey?: string;
           limit?: number;
         };
         
-        const results = await confluenceClient.searchContent(query, spaceKey, limit);
+        // Validate that at least one search parameter is provided
+        if (!query && !title) {
+          throw new Error('At least one of "query" or "title" must be provided');
+        }
+        
+        const results = await confluenceClient.searchContent(query, spaceKey, limit, title);
         return {
           content: [
             {

@@ -100,9 +100,35 @@ export class ConfluenceClient {
     );
   }
 
-  async searchContent(query: string, spaceKey?: string, limit = 25): Promise<SearchResult> {
+  async searchContent(
+    query?: string, 
+    spaceKey?: string, 
+    limit = 25, 
+    title?: string
+  ): Promise<SearchResult> {
+    // V2 API doesn't have a direct search endpoint, so we use v1 for CQL search
+    // This is the recommended approach as CQL search is only available in v1
+    
+    // Build search conditions
+    const searchConditions: string[] = [];
+    
+    if (query) {
+      searchConditions.push(`text ~ "${query}"`);
+    }
+    
+    if (title) {
+      searchConditions.push(`title ~ "${title}"`);
+    }
+    
+    // If neither query nor title provided, search for all content
+    if (searchConditions.length === 0) {
+      searchConditions.push('type = page');
+    }
+    
+    const searchQuery = searchConditions.join(' AND ');
+    
     const params: any = {
-      cql: `text ~ "${query}"`,
+      cql: searchQuery,
       limit,
       expand: 'body.storage,version,space'
     };
@@ -117,7 +143,18 @@ export class ConfluenceClient {
       params.cql = `(${allowedSpacesCql}) AND ${params.cql}`;
     }
 
-    const response: AxiosResponse<{ results: ConfluencePage[], start: number, limit: number, size: number, _links: any }> = await this.client.get('/search', { params });
+    // Use v1 API for search since v2 doesn't provide CQL search functionality
+    const searchUrl = `${this.config.baseUrl}/wiki/rest/api/search`;
+    const auth = Buffer.from(`${this.config.username}:${this.config.apiToken}`).toString('base64');
+    const response: AxiosResponse<{ results: ConfluencePage[], start: number, limit: number, size: number, _links: any }> = await axios.get(searchUrl, {
+      params,
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    });
     
     return {
       content: response.data.results,
