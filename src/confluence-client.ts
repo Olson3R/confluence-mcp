@@ -337,4 +337,25 @@ export class ConfluenceClient {
     const response: AxiosResponse<ConfluencePage> = await this.client.put(`/pages/${pageId}`, moveData);
     return response.data;
   }
+
+  async getPageChildren(pageId: string, limit = 25): Promise<ConfluencePage[]> {
+    const parentPage = await this.getPage(pageId);
+    
+    if (!parentPage.space || !parentPage.space.key) {
+      throw new Error('Unable to determine page space for access validation');
+    }
+    
+    if (!validateSpaceAccess(parentPage.space.key, this.config.allowedSpaces)) {
+      throw new Error(`Access denied to space: ${parentPage.space.key}`);
+    }
+
+    const response: AxiosResponse<{ results: ConfluencePage[] }> = await this.client.get(`/pages/${pageId}/children`, {
+      params: {
+        limit,
+        expand: 'version,space'
+      }
+    });
+    
+    return response.data.results;
+  }
 }

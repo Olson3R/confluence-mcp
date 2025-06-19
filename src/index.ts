@@ -180,6 +180,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ['spaceKey']
         }
+      },
+      {
+        name: 'get_page_children',
+        description: 'Get child pages of a specific page',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'Parent page ID'
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum results (default: 25)',
+              default: 25
+            }
+          },
+          required: ['pageId']
+        }
       }
     ]
   };
@@ -315,6 +334,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify(pages, null, 2)
+            }
+          ]
+        };
+      }
+
+      case 'get_page_children': {
+        const { pageId, limit = 25 } = args as {
+          pageId: string;
+          limit?: number;
+        };
+        
+        const children = await confluenceClient.getPageChildren(pageId, limit);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(children, null, 2)
             }
           ]
         };
