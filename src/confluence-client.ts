@@ -76,8 +76,15 @@ export class ConfluenceClient {
       params.cql = `(${allowedSpacesCql}) AND ${params.cql}`;
     }
 
-    const response: AxiosResponse<SearchResult> = await this.client.get('/pages', { params });
-    return response.data;
+    const response: AxiosResponse<{ results: ConfluencePage[], start: number, limit: number, size: number, _links: any }> = await this.client.get('/search', { params });
+    
+    return {
+      content: response.data.results,
+      start: response.data.start,
+      limit: response.data.limit,
+      size: response.data.size,
+      _links: response.data._links
+    };
   }
 
   async getPage(pageId: string, expand?: string): Promise<ConfluencePage> {
