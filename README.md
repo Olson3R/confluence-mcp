@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that provides secure access to Atlassian Confluence through its REST API.
 
+<a href="https://glama.ai/mcp/servers/@Olson3R/confluence-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@Olson3R/confluence-mcp/badge" alt="Confluence Server MCP server" />
+</a>
+
 ## Using with Claude Code
 
 To use this MCP server with Claude Code, add it to your MCP configuration file:
