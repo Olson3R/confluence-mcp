@@ -20,6 +20,9 @@ export class ConfluenceClient {
   private client: AxiosInstance;
   private config: ConfluenceConfig;
   private logger: Logger;
+  private spaceCache: Map<string, ConfluenceSpace> = new Map();
+  private spaceCacheExpiry: Map<string, number> = new Map();
+  private readonly CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
   constructor(config: ConfluenceConfig) {
     this.config = config;
@@ -290,14 +293,22 @@ export class ConfluenceClient {
     await this.client.delete(`/pages/${pageId}`);
   }
 
-  async listSpaces(limit = 50, start = 0): Promise<PaginatedResult<ConfluenceSpace>> {
+  async listSpaces(limit = 50, cursor?: string): Promise<PaginatedResult<ConfluenceSpace>> {
+    const params: any = { limit };
+    if (cursor) {
+      params.cursor = cursor;
+    }
+    
     const response: AxiosResponse<PaginatedResult<ConfluenceSpace>> = await this.client.get('/spaces', {
-      params: { limit, start }
+      params
     });
     
     const filteredResults = response.data.results.filter(space => 
       validateSpaceAccess(space.key, this.config.allowedSpaces)
     );
+    
+    // Cache the spaces
+    filteredResults.forEach(space => this.cacheSpace(space));
     
     return {
       ...response.data,
@@ -307,6 +318,13 @@ export class ConfluenceClient {
   }
 
   async getSpaceById(spaceId: string): Promise<ConfluenceSpace> {
+    // Check if we have this space in cache by ID
+    for (const [key, space] of this.spaceCache.entries()) {
+      if (space.id === spaceId && this.isSpaceCacheValid(key)) {
+        return space;
+      }
+    }
+    
     // Note: Since we only have access to space keys in configuration, we need to validate by key
     // This method is primarily for internal use after we've obtained a space ID
     const response: AxiosResponse<ConfluenceSpace> = await this.client.get(`/spaces/${spaceId}`);
@@ -316,7 +334,21 @@ export class ConfluenceClient {
       throw new Error(`Access denied to space: ${response.data.key}`);
     }
     
+    // Cache the space
+    this.cacheSpace(response.data);
+    
     return response.data;
+  }
+
+  private isSpaceCacheValid(spaceKey: string): boolean {
+    const expiry = this.spaceCacheExpiry.get(spaceKey);
+    return expiry !== undefined && Date.now() < expiry;
+  }
+
+  private cacheSpace(space: ConfluenceSpace): void {
+    const now = Date.now();
+    this.spaceCache.set(space.key, space);
+    this.spaceCacheExpiry.set(space.key, now + this.CACHE_TTL);
   }
 
   async getSpaceByKey(spaceKey: string): Promise<ConfluenceSpace> {
@@ -324,11 +356,37 @@ export class ConfluenceClient {
       throw new Error(`Access denied to space: ${spaceKey}`);
     }
 
-    // Get all spaces and find the one with matching key
-    const spaces = await this.listSpaces(50, 0);
-    const space = spaces.results.find(s => s.key === spaceKey);
+    // Check cache first
+    if (this.isSpaceCacheValid(spaceKey)) {
+      const cachedSpace = this.spaceCache.get(spaceKey);
+      if (cachedSpace) {
+        return cachedSpace;
+      }
+    }
+
+    // Search through all pages using cursor-based pagination
+    let cursor: string | undefined;
+    let found = false;
+    let space: ConfluenceSpace | undefined;
     
-    if (!space) {
+    do {
+      const spaces = await this.listSpaces(100, cursor);
+      space = spaces.results.find(s => s.key === spaceKey);
+      
+      if (space) {
+        found = true;
+        break;
+      }
+      
+      // Extract cursor from _links.next if available
+      cursor = undefined;
+      if (spaces._links?.next) {
+        const nextUrl = new URL(spaces._links.next);
+        cursor = nextUrl.searchParams.get('cursor') || undefined;
+      }
+    } while (cursor);
+    
+    if (!found || !space) {
       throw new Error(`Space not found: ${spaceKey}`);
     }
     

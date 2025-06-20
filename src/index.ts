@@ -170,10 +170,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Maximum results (default: 50)',
               default: 50
             },
-            start: {
-              type: 'number',
-              description: 'Starting index for pagination (default: 0)',
-              default: 0
+            cursor: {
+              type: 'string',
+              description: 'Cursor for pagination (from _links.next)'
             }
           }
         }
@@ -373,12 +372,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'list_spaces': {
-        const { limit = 50, start = 0 } = args as {
+        const { limit = 50, cursor } = args as {
           limit?: number;
-          start?: number;
+          cursor?: string;
         };
         
-        const spaces = await confluenceClient.listSpaces(limit, start);
+        const spaces = await confluenceClient.listSpaces(limit, cursor);
         return {
           content: [
             {
