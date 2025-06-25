@@ -6,41 +6,43 @@ A Model Context Protocol (MCP) server that provides secure access to Atlassian C
 
 To use this MCP server with Claude Code, add it to your MCP configuration file:
 
-### Option 1: Using the built version (recommended)
+### Option 1: Using claude mcp add-json (recommended)
 
-1. First, build the server:
-   ```bash
-   npm run build
-   ```
+The easiest way to add this server is using the `claude mcp add-json` command:
 
-2. Add to your MCP configuration file (`~/.config/claude-code/mcp_servers_config.json`):
-   ```json
-   {
-     "mcpServers": {
-       "confluence": {
-         "command": "node",
-         "args": ["/path/to/confluence_mcp/dist/index.js"],
-         "env": {
-           "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net",
-           "CONFLUENCE_USERNAME": "your-email@domain.com",
-           "CONFLUENCE_API_TOKEN": "your-api-token",
-           "ALLOWED_SPACES": "SPACE1,SPACE2,SPACE3"
-         }
-       }
-     }
-   }
-   ```
+```bash
+# First, build the server
+npm run build
 
-### Option 2: Using tsx for development
+# Then add it using claude mcp add-json
+claude mcp add-json confluence
+```
 
-For development or if you prefer running TypeScript directly:
+When prompted, paste the following JSON configuration:
+
+```json
+{
+  "command": "node",
+  "args": ["/path/to/confluence_mcp/dist/index.js"],
+  "env": {
+    "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net",
+    "CONFLUENCE_USERNAME": "your-email@domain.com",
+    "CONFLUENCE_API_TOKEN": "your-api-token",
+    "ALLOWED_SPACES": "SPACE1,SPACE2,SPACE3"
+  }
+}
+```
+
+### Option 2: Manual configuration
+
+Alternatively, you can manually edit your MCP configuration file (`~/.config/claude-code/mcp_servers_config.json`):
 
 ```json
 {
   "mcpServers": {
     "confluence": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/confluence_mcp/src/index.ts"],
+      "command": "node",
+      "args": ["/path/to/confluence_mcp/dist/index.js"],
       "env": {
         "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net",
         "CONFLUENCE_USERNAME": "your-email@domain.com",
@@ -48,6 +50,23 @@ For development or if you prefer running TypeScript directly:
         "ALLOWED_SPACES": "SPACE1,SPACE2,SPACE3"
       }
     }
+  }
+}
+```
+
+### Option 3: Using tsx for development
+
+For development or if you prefer running TypeScript directly:
+
+```json
+{
+  "command": "npx",
+  "args": ["tsx", "/path/to/confluence_mcp/src/index.ts"],
+  "env": {
+    "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net",
+    "CONFLUENCE_USERNAME": "your-email@domain.com",
+    "CONFLUENCE_API_TOKEN": "your-api-token",
+    "ALLOWED_SPACES": "SPACE1,SPACE2,SPACE3"
   }
 }
 ```

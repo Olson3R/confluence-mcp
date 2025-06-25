@@ -39,7 +39,32 @@ This MCP (Model Context Protocol) service enables Claude to interact with Atlass
 
 ## 2. Configure Claude Code
 
-Add the MCP server to your Claude Code configuration file at `~/.config/claude-code/mcp_servers_config.json`:
+### Option A: Using claude mcp add-json (recommended)
+
+The easiest way to add this server is using the `claude mcp add-json` command:
+
+```bash
+claude mcp add-json confluence
+```
+
+When prompted, paste the following JSON configuration:
+
+```json
+{
+  "command": "node",
+  "args": ["/Users/scotto/Documents/javascript/confluence_mcp/dist/index.js"],
+  "env": {
+    "CONFLUENCE_BASE_URL": "https://your-domain.atlassian.net",
+    "CONFLUENCE_USERNAME": "your-email@domain.com",
+    "CONFLUENCE_API_TOKEN": "your-api-token",
+    "ALLOWED_SPACES": "SPACE1,SPACE2,SPACE3"
+  }
+}
+```
+
+### Option B: Manual configuration
+
+Alternatively, you can manually add the MCP server to your Claude Code configuration file at `~/.config/claude-code/mcp_servers_config.json`:
 
 ```json
 {
